@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "Netflix Shuffle",
+  "author": "Josh Kopman",
+  "version": "1.6.1",
+  "description": "Shuffle Netflix episodes.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.netflix.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/enabled.png",
+    "32": "icons/enabled.png",
+    "48": "icons/enabled.png",
+    "128": "icons/enabled.png"
+  },
+  "action": {
+    "default_icon": "icons/enabled.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.netflix.com/title/*"
+      ],
+      "js": [
+        "SelectSeason.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.netflix.com/*"
+      ],
+      "js": [
+        "watchInterception.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}
