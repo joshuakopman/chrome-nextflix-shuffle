@@ -2,12 +2,9 @@
   "manifest_version": 3,
   "name": "Netflix Shuffle",
   "author": "Josh Kopman",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Shuffle Netflix episodes.",
   "permissions": [
-    "tabs",
-    "scripting",
-    "activeTab",
     "storage"
   ],
   "host_permissions": [

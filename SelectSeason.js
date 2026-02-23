@@ -4,42 +4,26 @@
   }
   window.__netflixShuffleTitleHookInstalled = true;
 
-  const LOG = "[NetflixShuffle:title]";
   let alreadyPickedOnThisPage = false;
 
-  function log(...args) {
-    console.log(LOG, ...args);
-  }
-
-  function clickElement(element, label) {
+  function clickElement(element) {
     if (!element) {
-      log("clickElement missing target", label);
       return false;
     }
 
     const target = element.closest("a,button,[role='button']") || element.querySelector("a,button,[role='button']") || element;
     if (!target) {
-      log("clickElement resolved no clickable target", label);
       return false;
     }
 
     const beforeHref = window.location.href;
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
 
-    // Some Netflix controls are keyboard-driven buttons on div containers.
     if (!beforeHref.includes("/watch/") && target.getAttribute("role") === "button") {
       target.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       target.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
     }
 
-    log("clicked", label, {
-      tag: target.tagName,
-      role: target.getAttribute("role"),
-      dataUia: target.getAttribute("data-uia"),
-      aria: target.getAttribute("aria-label"),
-      text: (target.textContent || "").trim().slice(0, 80),
-      hrefChangedImmediately: beforeHref !== window.location.href
-    });
     return true;
   }
 
@@ -62,7 +46,6 @@
     for (const selector of selectors) {
       const node = document.querySelector(selector);
       if (node) {
-        log("season picker found", selector);
         return node;
       }
     }
@@ -80,15 +63,7 @@
       [...document.querySelectorAll('[data-uia="dropdown-menu-item"]')]
     ];
 
-    const all = buckets.flat();
-    const filtered = all.filter((node) => /season\s+\d+/i.test((node.textContent || "").trim()));
-    log("season options", { totalRaw: all.length, filtered: filtered.length });
-    return filtered;
-  }
-
-  function isWatchLink(node) {
-    const href = node.getAttribute("href") || "";
-    return /^\/watch\/\d+/i.test(href);
+    return buckets.flat().filter((node) => /season\s+\d+/i.test((node.textContent || "").trim()));
   }
 
   function findEpisodeCandidates() {
@@ -100,13 +75,11 @@
     ].filter(Boolean);
 
     if (episodeRoots.length === 0) {
-      log("episode root not found");
       return [];
     }
 
     const root = episodeRoots[0];
 
-    // Primary path from your DOM: episode cards are div role=button elements.
     const cardButtons = [
       ...root.querySelectorAll('div[data-uia="titleCard--container"][role="button"]'),
       ...root.querySelectorAll('div.titleCardList--container.episode-item[role="button"]'),
@@ -114,14 +87,10 @@
     ].filter((node) => (node.getAttribute("aria-label") || node.textContent || "").trim().length > 0);
 
     if (cardButtons.length > 0) {
-      log("episode card candidates found", {
-        count: cardButtons.length,
-        sample: (cardButtons[0].getAttribute("aria-label") || cardButtons[0].textContent || "").trim().slice(0, 100)
-      });
       return cardButtons;
     }
 
-    const specificSelectors = [
+    const linkSelectors = [
       'a[data-uia*="episode"][href^="/watch/"]',
       '.episode-item a[href^="/watch/"]',
       '.episodeLockup a[href^="/watch/"]',
@@ -129,17 +98,9 @@
       'a[href^="/watch/"]'
     ];
 
-    for (const selector of specificSelectors) {
-      const nodes = [...root.querySelectorAll(selector)]
-        .filter((node) => isWatchLink(node))
-        .filter((node) => (node.textContent || "").trim().length > 0);
-
+    for (const selector of linkSelectors) {
+      const nodes = [...root.querySelectorAll(selector)].filter((node) => (node.textContent || "").trim().length > 0);
       if (nodes.length > 0) {
-        log("episode link candidates found", {
-          selector,
-          count: nodes.length,
-          sample: (nodes[0].textContent || "").trim().slice(0, 100)
-        });
         return nodes;
       }
     }
@@ -173,24 +134,20 @@
 
   function runPicker() {
     if (alreadyPickedOnThisPage) {
-      log("runPicker skipped: already ran on this page");
       return;
     }
 
     alreadyPickedOnThisPage = true;
-    log("runPicker start", { url: window.location.href, title: document.title });
 
     waitForSeasonPicker(
       (seasonPicker) => {
-        clickElement(seasonPicker, "season-picker");
+        clickElement(seasonPicker);
 
         setTimeout(() => {
           const seasons = findSeasonOptions();
           const seasonChoice = randomItem(seasons);
           if (seasonChoice) {
-            clickElement(seasonChoice, "season-choice");
-          } else {
-            log("no season options found after opening dropdown");
+            clickElement(seasonChoice);
           }
 
           let attempts = 0;
@@ -202,65 +159,49 @@
               clearInterval(retry);
               const choice = randomItem(episodes);
               if (choice) {
-                clickElement(choice, "episode-choice");
-                log("episode clicked", {
-                  attempts,
-                  totalCandidates: episodes.length,
-                  choiceText: (choice.getAttribute("aria-label") || choice.textContent || "").trim().slice(0, 120)
-                });
+                clickElement(choice);
               }
               return;
             }
 
-            log("episode attempt", { attempts, status: "none yet" });
-
             if (attempts >= 16) {
               clearInterval(retry);
               alreadyPickedOnThisPage = false;
-              log("episode candidates not found; picker reset for retry");
             }
           }, 500);
         }, 700);
       },
       () => {
         alreadyPickedOnThisPage = false;
-        log("runPicker timeout: no season picker after wait window");
       }
     );
   }
 
-  function maybeRun(trigger) {
-    log("maybeRun", { trigger, href: window.location.href });
-
+  function maybeRun() {
     chrome.storage.local.get({ shuffleEnabled: false }, ({ shuffleEnabled }) => {
-      log("storage read", { shuffleEnabled });
-
       if (!shuffleEnabled) {
-        log("not enabled; exit");
         return;
       }
 
       try {
         chrome.runtime.sendMessage({ type: "rememberTitleUrl", url: window.location.href });
       } catch (error) {
-        log("rememberTitleUrl send failed", String(error));
+        // no-op
       }
 
       runPicker();
     });
   }
 
-  log("title script init", { href: window.location.href, readyState: document.readyState });
-  maybeRun("init");
+  maybeRun();
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes.shuffleEnabled) {
       return;
     }
 
-    log("storage.onChanged", { shuffleEnabled: changes.shuffleEnabled.newValue });
     if (changes.shuffleEnabled.newValue === true) {
-      maybeRun("enabled-change");
+      maybeRun();
     }
   });
 })();

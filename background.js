@@ -1,14 +1,8 @@
-let disableRandom = true;
-const LOG = "[NetflixShuffle]";
-
-function log(...args) {
-  console.log(LOG, ...args);
-}
+let shuffleEnabled = false;
 
 function applyEnabledState(enabled) {
-  disableRandom = !enabled;
+  shuffleEnabled = enabled;
   chrome.action.setBadgeText({ text: enabled ? "On" : "Off" });
-  log("enabled state", enabled);
 }
 
 function deriveTitleFromWatchUrl(url) {
@@ -27,24 +21,16 @@ function rememberTitleUrl(url) {
   }
 
   chrome.storage.local.set({ lastTitleUrl: titleUrl });
-  log("remember title", titleUrl);
 }
 
-chrome.storage.local.get({ shuffleEnabled: false }, ({ shuffleEnabled }) => {
-  applyEnabledState(shuffleEnabled);
+chrome.storage.local.get({ shuffleEnabled: false }, ({ shuffleEnabled: enabled }) => {
+  applyEnabledState(Boolean(enabled));
 });
 
-chrome.action.onClicked.addListener(async () => {
-  const nextEnabled = disableRandom;
+chrome.action.onClicked.addListener(() => {
+  const nextEnabled = !shuffleEnabled;
   applyEnabledState(nextEnabled);
   chrome.storage.local.set({ shuffleEnabled: nextEnabled });
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.url) {
-    rememberTitleUrl(tab.url);
-  }
-
-  log("action clicked", { nextEnabled });
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
